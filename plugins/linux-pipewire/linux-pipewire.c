@@ -21,9 +21,14 @@
 
 #include <obs-module.h>
 #include <obs-nix-platform.h>
+#include <glad/glad.h>
 
 #include <pipewire/pipewire.h>
-#include "pipewire-capture.h"
+#include "screencast-portal.h"
+
+#if PW_CHECK_VERSION(0, 3, 60)
+#include "camera-portal.h"
+#endif
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("linux-pipewire", "en-US")
@@ -34,23 +39,29 @@ MODULE_EXPORT const char *obs_module_description(void)
 
 bool obs_module_load(void)
 {
+	obs_enter_graphics();
+	gladLoadGL();
+	obs_leave_graphics();
+
 	pw_init(NULL, NULL);
 
-	// OBS PipeWire Screen Capture
-	switch (obs_get_nix_platform()) {
-#ifdef ENABLE_WAYLAND
-	case OBS_NIX_PLATFORM_WAYLAND:
+#if PW_CHECK_VERSION(0, 3, 60)
+	camera_portal_load();
 #endif
-	case OBS_NIX_PLATFORM_X11_EGL:
-		pipewire_capture_load();
-		break;
-	}
+
+	screencast_portal_load();
 
 	return true;
 }
 
 void obs_module_unload(void)
 {
+	screencast_portal_unload();
+
+#if PW_CHECK_VERSION(0, 3, 60)
+	camera_portal_unload();
+#endif
+
 #if PW_CHECK_VERSION(0, 3, 49)
 	pw_deinit();
 #endif

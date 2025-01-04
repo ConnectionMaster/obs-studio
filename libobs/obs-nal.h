@@ -1,5 +1,5 @@
 /******************************************************************************
-    Copyright (C) 2022 by Hugh Bailey <obs.jim@gmail.com>
+    Copyright (C) 2023 by Lain Bailey <lain@obsproject.com>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -23,8 +23,14 @@
 extern "C" {
 #endif
 
-EXPORT const uint8_t *obs_nal_find_startcode(const uint8_t *p,
-					     const uint8_t *end);
+enum {
+	OBS_NAL_PRIORITY_DISPOSABLE = 0,
+	OBS_NAL_PRIORITY_LOW = 1,
+	OBS_NAL_PRIORITY_HIGH = 2,
+	OBS_NAL_PRIORITY_HIGHEST = 3,
+};
+
+EXPORT const uint8_t *obs_nal_find_startcode(const uint8_t *p, const uint8_t *end);
 
 #ifdef __cplusplus
 }

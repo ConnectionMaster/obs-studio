@@ -1,78 +1,83 @@
-project(obs-ffmpeg)
+cmake_minimum_required(VERSION 3.28...3.30)
 
 option(ENABLE_FFMPEG_LOGGING "Enables obs-ffmpeg logging" OFF)
+option(ENABLE_NEW_MPEGTS_OUTPUT "Use native SRT/RIST mpegts output" ON)
 
-find_package(
-  FFmpeg REQUIRED
-  COMPONENTS avcodec
-             avfilter
-             avdevice
-             avutil
-             swscale
-             avformat
-             swresample)
+if(OS_LINUX OR OS_WINDOWS)
+  option(ENABLE_FFMPEG_NVENC "Enable legacy FFmpeg NVENC encoder" OFF)
+endif()
+
+include(cmake/dependencies.cmake)
 
 add_library(obs-ffmpeg MODULE)
 add_library(OBS::ffmpeg ALIAS obs-ffmpeg)
-add_subdirectory(ffmpeg-mux)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/obs-ffmpeg-config.h.in
-               ${CMAKE_BINARY_DIR}/config/obs-ffmpeg-config.h)
+add_subdirectory(ffmpeg-mux)
 
 target_sources(
   obs-ffmpeg
-  PRIVATE obs-ffmpeg.c
-          obs-ffmpeg-video-encoders.c
-          obs-ffmpeg-audio-encoders.c
-          obs-ffmpeg-av1.c
-          obs-ffmpeg-nvenc.c
-          obs-ffmpeg-output.c
-          obs-ffmpeg-mux.c
-          obs-ffmpeg-mux.h
-          obs-ffmpeg-hls-mux.c
-          obs-ffmpeg-source.c
-          obs-ffmpeg-compat.h
-          obs-ffmpeg-formats.h
-          ${CMAKE_BINARY_DIR}/config/obs-ffmpeg-config.h)
+  PRIVATE
+    $<$<BOOL:${ENABLE_FFMPEG_LOGGING}>:obs-ffmpeg-logging.c>
+    $<$<BOOL:${ENABLE_FFMPEG_NVENC}>:obs-ffmpeg-nvenc.c>
+    $<$<BOOL:${ENABLE_NEW_MPEGTS_OUTPUT}>:obs-ffmpeg-mpegts.c>
+    $<$<BOOL:${ENABLE_NEW_MPEGTS_OUTPUT}>:obs-ffmpeg-rist.h>
+    $<$<BOOL:${ENABLE_NEW_MPEGTS_OUTPUT}>:obs-ffmpeg-srt.h>
+    $<$<BOOL:${ENABLE_NEW_MPEGTS_OUTPUT}>:obs-ffmpeg-url.h>
+    $<$<PLATFORM_ID:Linux,FreeBSD,OpenBSD>:obs-ffmpeg-vaapi.c>
+    $<$<PLATFORM_ID:Linux,FreeBSD,OpenBSD>:vaapi-utils.c>
+    $<$<PLATFORM_ID:Linux,FreeBSD,OpenBSD>:vaapi-utils.h>
+    $<$<PLATFORM_ID:Windows>:texture-amf-opts.hpp>
+    $<$<PLATFORM_ID:Windows>:texture-amf.cpp>
+    obs-ffmpeg-audio-encoders.c
+    obs-ffmpeg-av1.c
+    obs-ffmpeg-compat.h
+    obs-ffmpeg-formats.h
+    obs-ffmpeg-hls-mux.c
+    obs-ffmpeg-mux.c
+    obs-ffmpeg-mux.h
+    obs-ffmpeg-output.c
+    obs-ffmpeg-output.h
+    obs-ffmpeg-source.c
+    obs-ffmpeg-video-encoders.c
+    obs-ffmpeg.c
+)
 
-target_include_directories(obs-ffmpeg PRIVATE ${CMAKE_BINARY_DIR}/config)
+target_compile_options(obs-ffmpeg PRIVATE $<$<COMPILE_LANG_AND_ID:C,AppleClang,Clang>:-Wno-shorten-64-to-32>)
+target_compile_definitions(
+  obs-ffmpeg
+  PRIVATE
+    $<$<BOOL:${ENABLE_FFMPEG_LOGGING}>:ENABLE_FFMPEG_LOGGING>
+    $<$<BOOL:${ENABLE_FFMPEG_NVENC}>:ENABLE_FFMPEG_NVENC>
+    $<$<BOOL:${ENABLE_NEW_MPEGTS_OUTPUT}>:NEW_MPEGTS_OUTPUT>
+)
 
 target_link_libraries(
   obs-ffmpeg
-  PRIVATE OBS::libobs
-          OBS::media-playback
-          OBS::opts-parser
-          FFmpeg::avcodec
-          FFmpeg::avfilter
-          FFmpeg::avformat
-          FFmpeg::avdevice
-          FFmpeg::avutil
-          FFmpeg::swscale
-          FFmpeg::swresample)
-
-if(ENABLE_FFMPEG_LOGGING)
-  target_sources(obs-ffmpeg PRIVATE obs-ffmpeg-logging.c)
-endif()
-
-set_target_properties(obs-ffmpeg PROPERTIES FOLDER "plugins/obs-ffmpeg" PREFIX
-                                                                        "")
+  PRIVATE
+    OBS::libobs
+    OBS::media-playback
+    OBS::opts-parser
+    FFmpeg::avcodec
+    FFmpeg::avfilter
+    FFmpeg::avformat
+    FFmpeg::avdevice
+    FFmpeg::avutil
+    FFmpeg::swscale
+    FFmpeg::swresample
+    $<$<PLATFORM_ID:Windows>:OBS::w32-pthreads>
+    $<$<PLATFORM_ID:Windows>:AMF::AMF>
+    $<$<PLATFORM_ID:Windows>:ws2_32>
+    $<$<PLATFORM_ID:Linux,FreeBSD,OpenBSD>:Libva::va>
+    $<$<PLATFORM_ID:Linux,FreeBSD,OpenBSD>:Libva::drm>
+    $<$<PLATFORM_ID:Linux,FreeBSD,OpenBSD>:Libpci::pci>
+    $<$<PLATFORM_ID:Linux,FreeBSD,OpenBSD>:Libdrm::Libdrm>
+    $<$<BOOL:${ENABLE_NEW_MPEGTS_OUTPUT}>:Librist::Librist>
+    $<$<BOOL:${ENABLE_NEW_MPEGTS_OUTPUT}>:Libsrt::Libsrt>
+)
 
 if(OS_WINDOWS)
-  if(MSVC)
-    target_link_libraries(obs-ffmpeg PRIVATE OBS::w32-pthreads)
-  endif()
-
-  set(MODULE_DESCRIPTION "OBS FFmpeg module")
-  configure_file(${CMAKE_SOURCE_DIR}/cmake/bundle/windows/obs-module.rc.in
-                 obs-ffmpeg.rc)
-
-  target_sources(obs-ffmpeg PRIVATE jim-nvenc.c jim-nvenc.h jim-nvenc-helpers.c
-                                    obs-ffmpeg.rc)
-
-elseif(OS_POSIX AND NOT OS_MACOS)
-  find_package(Libpci REQUIRED)
-  target_sources(obs-ffmpeg PRIVATE obs-ffmpeg-vaapi.c)
-  target_link_libraries(obs-ffmpeg PRIVATE LIBPCI::LIBPCI)
+  configure_file(cmake/windows/obs-module.rc.in obs-ffmpeg.rc)
+  target_sources(obs-ffmpeg PRIVATE obs-ffmpeg.rc)
 endif()
 
-setup_plugin_target(obs-ffmpeg)
+set_target_properties_obs(obs-ffmpeg PROPERTIES FOLDER plugins/obs-ffmpeg PREFIX "")

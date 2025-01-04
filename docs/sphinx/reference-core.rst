@@ -52,7 +52,7 @@ Initialization, Shutdown, and Information
 .. function:: void obs_set_locale(const char *locale)
 
    Sets a new locale to use for modules.  This will call
-   obs_module_set_locale for each module with the new locale.
+   :c:func:`obs_module_set_locale()` for each module with the new locale.
   
    :param  locale: The locale to use for modules
 
@@ -67,8 +67,8 @@ Initialization, Shutdown, and Information
 .. function:: profiler_name_store_t *obs_get_profiler_name_store(void)
 
    :return: The profiler name store (see util/profiler.h) used by OBS,
-            which is either a name store passed to obs_startup, an
-            internal name store, or NULL in case obs_initialized()
+            which is either a name store passed to :c:func:`obs_startup()`, an
+            internal name store, or NULL in case :c:func:`obs_initialized()`
             returns false.
 
 ---------------------
@@ -278,11 +278,16 @@ Libobs Objects
    :c:func:`obs_source_get_weak_source()` if you want to retain a
    reference after obs_enum_sources finishes.
 
+   For scripting, use :py:func:`obs_enum_sources`.
+
 ---------------------
 
 .. function:: void obs_enum_scenes(bool (*enum_proc)(void*, obs_source_t*), void *param)
 
-   Enumerates all scenes.
+   Enumerates all scenes. Use :c:func:`obs_scene_from_source()` if the scene is
+   needed as an :c:type:`obs_scene_t`. The order that they are enumerated should
+   not be relied on. If one intends to enumerate the scenes in the order
+   presented by the OBS Studio Frontend, use :c:func:`obs_frontend_get_scenes()`.
   
    Callback function returns true to continue enumeration, or false to end
    enumeration.
@@ -297,11 +302,25 @@ Libobs Objects
 
    Enumerates outputs.
 
+   Callback function returns true to continue enumeration, or false to end
+   enumeration.
+
+   Use :c:func:`obs_output_get_ref()` or
+   :c:func:`obs_output_get_weak_output()` if you want to retain a
+   reference after obs_enum_outputs finishes.
+
 ---------------------
 
 .. function:: void obs_enum_encoders(bool (*enum_proc)(void*, obs_encoder_t*), void *param)
 
    Enumerates encoders.
+
+   Callback function returns true to continue enumeration, or false to end
+   enumeration.
+
+   Use :c:func:`obs_encoder_get_ref()` or
+   :c:func:`obs_encoder_get_weak_encoder()` if you want to retain a
+   reference after obs_enum_encoders finishes.
 
 ---------------------
 
@@ -314,12 +333,34 @@ Libobs Objects
 
 ---------------------
 
+.. function:: obs_source_t *obs_get_source_by_uuid(const char *uuid)
+
+   Gets a source by its UUID.
+  
+   Increments the source reference counter, use
+   :c:func:`obs_source_release()` to release it when complete.
+
+   .. versionadded:: 29.1
+
+---------------------
+
 .. function:: obs_source_t *obs_get_transition_by_name(const char *name)
 
    Gets a transition by its name.
   
    Increments the source reference counter, use
    :c:func:`obs_source_release()` to release it when complete.
+
+---------------------
+
+.. function:: obs_source_t *obs_get_transition_by_uuid(const char *uuid)
+
+   Gets a transition by its UUID.
+
+   Increments the source reference counter, use
+   :c:func:`obs_source_release()` to release it when complete.
+
+   .. versionadded:: 29.1
 
 ---------------------
 
@@ -361,7 +402,8 @@ Libobs Objects
 
 .. function:: obs_data_t *obs_save_source(obs_source_t *source)
 
-   :return: A new reference to a source's saved data
+   :return: A new reference to a source's saved data. Use
+            :c:func:`obs_data_release()` to release it when complete.
 
 ---------------------
 
@@ -445,7 +487,7 @@ Video, Audio, and Graphics
 
 .. function:: gs_effect_t *obs_get_base_effect(enum obs_base_effect effect)
 
-   Returns a commoinly used base effect.
+   Returns a commonly used base effect.
 
    :param effect: | Can be one of the following values:
                   | OBS_EFFECT_DEFAULT             - RGB/YUV
@@ -459,30 +501,10 @@ Video, Audio, and Graphics
 
 ---------------------
 
-.. function:: void obs_render_main_view(void)
-
-   Renders the main view.
-
-   Note: This function is deprecated.
-
----------------------
-
 .. function:: void obs_render_main_texture(void)
 
    Renders the main output texture.  Useful for rendering a preview pane
    of the main output.
-
----------------------
-
-.. function:: void obs_set_master_volume(float volume)
-
-   Sets the master user volume.
-
----------------------
-
-.. function:: float obs_get_master_volume(void)
-
-   :return: The master user volume
 
 ---------------------
 
@@ -492,9 +514,20 @@ Video, Audio, and Graphics
 
 ---------------------
 
+.. function:: void obs_reset_audio_monitoring(void)
+
+   Resets all audio monitoring devices.
+
+   .. versionadded:: 30.1
+
+---------------------
+
 .. function:: void obs_enum_audio_monitoring_devices(obs_enum_audio_device_cb cb, void *data)
 
    Enumerates audio devices which can be used for audio monitoring.
+
+   Callback function returns true to continue enumeration, or false to end
+   enumeration.
 
    Relevant data types used with this function:
 
@@ -521,6 +554,19 @@ Video, Audio, and Graphics
 
    Adds/removes a main rendering callback.  Allows custom rendering to
    the main stream/recording output.
+
+   For scripting (**Lua only**), use :py:func:`obs_add_main_render_callback`
+   and :py:func:`obs_remove_main_render_callback`.
+
+---------------------
+
+.. function:: void obs_add_main_rendered_callback(void (*rendered)(void *param), void *param)
+              void obs_remove_main_rendered_callback(void (*rendered)(void *param), void *param)
+
+   Adds/removes a main rendered callback.  Allows using the result of
+   the main stream/recording output.
+
+   .. versionadded:: 29.1
 
 ---------------------
 
@@ -552,7 +598,8 @@ Primary signal/procedure handlers
 
 .. function:: signal_handler_t *obs_get_signal_handler(void)
 
-   :return: The primary obs signal handler
+   :return: The primary obs signal handler. Should not be manually freed,
+            as its lifecycle is managed by libobs.
 
    See :ref:`core_signal_handler_reference` for more information on
    core signals.
@@ -561,7 +608,8 @@ Primary signal/procedure handlers
 
 .. function:: proc_handler_t *obs_get_proc_handler(void)
 
-   :return: The primary obs procedure handler
+   :return: The primary obs procedure handler. Should not be manually freed,
+            as its lifecycle is managed by libobs.
 
 
 .. _core_signal_handler_reference:
@@ -581,6 +629,10 @@ Core OBS Signals
 
    Called when a source has been removed (:c:func:`obs_source_remove()`
    has been called on the source).
+
+**source_update** (ptr source)
+
+   Called when a source's settings have been updated.
 
 **source_save** (ptr source)
 
@@ -618,6 +670,22 @@ Core OBS Signals
 
    Called when a source's volume has changed.
 
+**source_audio_activate** (ptr source)
+
+   Called when a source's audio becomes active.
+
+**source_audio_deactivate** (ptr source)
+
+   Called when a source's audio becomes inactive.
+
+**source_filter_add** (ptr source, ptr filter)
+
+   Called when a filter is added to a source.
+
+**source_filter_remove** (ptr source, ptr filter)
+
+   Called when a filter is removed from a source.
+
 **source_transition_start** (ptr source)
 
    Called when a transition has started its transition.
@@ -633,10 +701,6 @@ Core OBS Signals
 **channel_change** (int channel, in out ptr source, ptr prev_source)
 
    Called when :c:func:`obs_set_output_source()` has been called.
-
-**master_volume** (in out float volume)
-
-   Called when the master volume has changed.
 
 **hotkey_layout_change** ()
 
@@ -763,3 +827,76 @@ Displays
 .. function:: void obs_display_set_background_color(obs_display_t *display, uint32_t color)
 
    Sets the background (clear) color for the display context.
+
+.. _view_reference:
+
+Views
+----------------
+
+.. function:: obs_view_t *obs_view_create(void)
+
+   :return: A view context
+
+---------------------
+
+.. function:: void obs_view_destroy(obs_view_t *view)
+
+   Destroys a view context.
+
+---------------------
+
+.. function:: void obs_view_render(obs_view_t *view)
+
+   Renders the sources of this view context.
+
+---------------------
+
+.. function:: video_t *obs_view_add(obs_view_t *view)
+
+   Renders the sources of this view context.
+
+   :return: The main video output handler for the view context
+
+---------------------
+
+.. function:: video_t *obs_view_add2(obs_view_t *view, struct obs_video_info *ovi)
+
+   Adds a view to the main render loop, with custom video settings.
+
+   :return: The main video output handler for the view context
+
+---------------------
+
+.. function:: void obs_view_remove(obs_view_t *view)
+
+   Removes a view from the main render loop.
+
+---------------------
+
+.. function:: void obs_view_set_source(obs_view_t *view, uint32_t channel, obs_source_t *source)
+
+   Sets the source to be used for this view context.
+
+---------------------
+
+.. function:: obs_source_t *obs_view_get_source(obs_view_t *view, uint32_t channel)
+
+   :return: The source currently in use for this view context
+
+---------------------
+
+.. function:: bool obs_view_get_video_info(obs_view_t *view, struct obs_video_info *ovi)
+
+   Gets the video settings of the first matching mix currently in use for this view context.
+
+   :return: *false* if no video
+
+   .. deprecated:: 3X.X
+
+---------------------
+
+.. function:: void obs_view_enum_video_info(obs_view_t *view, bool (*enum_proc)(void *, struct obs_video_info *), void *param)
+
+   Enumerates all the video info of all mixes that use the specified mix.
+
+   .. versionadded:: 30.1
